@@ -12,7 +12,6 @@ package melnorme.lang.utils.concurrency;
 
 import static melnorme.utilbox.core.Assert.AssertNamespace.assertNotNull;
 import static melnorme.utilbox.core.Assert.AssertNamespace.assertTrue;
-
 import melnorme.lang.tooling.common.ops.IOperationMonitor;
 import melnorme.utilbox.concurrency.OperationCancellation;
 import melnorme.utilbox.core.fntypes.Result;
@@ -22,64 +21,60 @@ import melnorme.utilbox.core.fntypes.Result;
  * 
  * Note {@link #_invariant_()}
  */
-public class ConcurrentlyDerivedResult<VALUE, EXC extends Exception, SELF> 
-	extends ConcurrentlyDerivedData<Result<VALUE, EXC>, SELF> {
-	
-	public ConcurrentlyDerivedResult() {
-		super();
-		internalSetData(new Result<>(null));
-		_invariant_();
-	}
-	
-	public void _invariant_() {
-		assertNotNull(getStoredData());
-	}
-	
-	@Override
-	public void internalSetData(Result<VALUE, EXC> newData) {
-		super.internalSetData(assertNotNull(newData));
-	}
-	
-	/* -----------------  ----------------- */
-	
-	public void setUpdateTask(ResultUpdateTask newUpdateTask) {
-		super.setUpdateTask(newUpdateTask);
-	}
-	
-	@Override
-	public void setUpdateTask(DataUpdateTask<Result<VALUE, EXC>> newUpdateTask) {
-		assertTrue(newUpdateTask instanceof ConcurrentlyDerivedResult.ResultUpdateTask);
-		super.setUpdateTask(newUpdateTask);
-	}
-	
-	public abstract class ResultUpdateTask extends DataUpdateTask<Result<VALUE, EXC>> {
-		
-		public ResultUpdateTask(String taskDisplayName) {
-			super(ConcurrentlyDerivedResult.this, taskDisplayName);
-		}
-		
-		@Override
-		protected Result<VALUE, EXC> createNewData() throws OperationCancellation {
-			try {
-				return new Result<>(doCreateNewData());
-			} catch(RuntimeException | OperationCancellation e) {
-				// WARNING: make sure the exception we catch here match the function throws signature
-				// including RuntimeException's
-				throw e; 
-			} catch(Exception e) {
-				// We can't catch EXC directly because it's a type parameter
-				@SuppressWarnings("unchecked")
-				EXC exc = (EXC) e;
-				return new Result<>(null, exc);
-			}
-		}
-		
-		protected abstract VALUE doCreateNewData() throws EXC, OperationCancellation;
-		
-	}
-	
-	public VALUE awaitUpdatedResultValue(IOperationMonitor om) throws OperationCancellation, EXC {
-		return awaitUpdatedData(om).get();
-	}
-	
+public class ConcurrentlyDerivedResult<VALUE, EXC extends Exception, SELF> extends ConcurrentlyDerivedData<Result<VALUE, EXC>, SELF> {
+
+    public ConcurrentlyDerivedResult() {
+        super();
+        internalSetData(createResult(null, null));
+        _invariant_();
+    }
+
+    public void _invariant_() {
+        assertNotNull(getStoredData());
+    }
+
+    @Override
+    public void internalSetData(Result<VALUE, EXC> newData) {
+        super.internalSetData(assertNotNull(newData));
+    }
+
+    protected Result<VALUE, EXC> createResult(VALUE resultValue, EXC resultException) {
+        return new Result<>(resultValue, resultException);
+    }
+
+    /* -----------------  ----------------- */
+    public void setUpdateTask(ResultUpdateTask newUpdateTask) {
+        super.setUpdateTask(newUpdateTask);
+    }
+
+    @Override
+    public void setUpdateTask(DataUpdateTask<Result<VALUE, EXC>> newUpdateTask) {
+        assertTrue(newUpdateTask instanceof ConcurrentlyDerivedResult.ResultUpdateTask);
+        super.setUpdateTask(newUpdateTask);
+    }
+
+    public abstract class ResultUpdateTask extends DataUpdateTask<Result<VALUE, EXC>> {
+
+        public ResultUpdateTask(String taskDisplayName) {
+            super(ConcurrentlyDerivedResult.this, taskDisplayName);
+        }
+
+        @Override
+        protected Result<VALUE, EXC> createNewData() throws OperationCancellation {
+            try {
+                return createResult(doCreateNewData(), null);
+            } catch (RuntimeExceptionOperationCancellation |  e) {
+                throw e;
+            } catch (Exception e) {
+                @SuppressWarnings(value = { "unchecked" }) EXC exc = (EXC) e;
+                return createResult(null, exc);
+            }
+        }
+
+        protected abstract VALUE doCreateNewData() throws EXC, OperationCancellation;
+    }
+
+    public VALUE awaitUpdatedResultValue(IOperationMonitor om) throws OperationCancellation, EXC {
+        return awaitUpdatedData(om).get();
+    }
 }
